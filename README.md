@@ -1,5 +1,7 @@
 # LibreMeet
 
+> **Note:** This fork exists to illustrate what vibe coding can do when applied to open-core software, supporting the article series ["Vibe Coding Open Core Out of its Lockbox"](https://magnus919.com/series/vibe-coding-open-core-out-of-its-lockbox/). I do not seriously intend to pursue a fully functional fork, and this repository is archived. If you're motivated to pick it up, I'd love to see what you build. — Magnus
+
 A fork of [Meetily](https://meetily.ai) — an open-core AI meeting assistant — that exists because the MIT license lets you take good software and make it better without locking features behind a paywall.
 
 This repo is the subject of the three-part series ["Vibe Coding Open Core Out of its Lockbox"](https://magnus919.com/series/vibe-coding-open-core-out-of-its-lockbox/), which documents the fork from start to finish:
