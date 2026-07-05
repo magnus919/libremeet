@@ -34,6 +34,12 @@ export interface VirtualizedTranscriptViewProps {
     totalCount?: number;
     loadedCount?: number;
     onLoadMore?: () => void;
+
+    // Diarization props
+    /** Speaker name mappings: SPEAKER_00 → "Alice" */
+    speakerNames?: Record<string, string>;
+    /** Callback when a speaker label is renamed */
+    onSpeakerRename?: (speakerId: string, newName: string) => void;
 }
 
 // Threshold for enabling virtualization (below this, use simple rendering)
@@ -63,6 +69,28 @@ function cleanStopWords(text: string): string {
     return cleanedText.replace(/\s+/g, ' ').trim();
 }
 
+// Color palette for speaker badges (rotates through these)
+const SPEAKER_COLORS = [
+    { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+    { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' },
+    { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+    { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
+    { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' },
+    { bg: 'bg-teal-100', text: 'text-teal-700', border: 'border-teal-200' },
+];
+
+// Track color assignment per speaker
+const speakerColorCache: Record<string, number> = {};
+let nextColorIndex = 0;
+
+function getSpeakerColor(speakerId: string): { bg: string; text: string; border: string } {
+    if (!(speakerId in speakerColorCache)) {
+        speakerColorCache[speakerId] = nextColorIndex % SPEAKER_COLORS.length;
+        nextColorIndex++;
+    }
+    return SPEAKER_COLORS[speakerColorCache[speakerId]];
+}
+
 // Memoized transcript segment component
 const TranscriptSegment = memo(function TranscriptSegment({
     id,
@@ -71,6 +99,9 @@ const TranscriptSegment = memo(function TranscriptSegment({
     confidence,
     isStreaming,
     showConfidence,
+    speakerId,
+    speakerName,
+    onSpeakerRename,
 }: {
     id: string;
     timestamp: number;
@@ -78,8 +109,23 @@ const TranscriptSegment = memo(function TranscriptSegment({
     confidence?: number;
     isStreaming: boolean;
     showConfidence: boolean;
+    speakerId?: string;
+    speakerName?: string;
+    onSpeakerRename?: (speakerId: string, newName: string) => void;
 }) {
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editValue, setEditValue] = useState(speakerName || '');
+
+    const displayName = speakerName || speakerId || '';
+    const colors = speakerId ? getSpeakerColor(speakerId) : null;
+
+    const handleRename = () => {
+        if (editValue.trim() && editValue !== speakerName && speakerId && onSpeakerRename) {
+            onSpeakerRename(speakerId, editValue.trim());
+        }
+        setIsEditing(false);
+    };
 
     return (
         <div id={`segment-${id}`} className="mb-3">
@@ -96,7 +142,37 @@ const TranscriptSegment = memo(function TranscriptSegment({
                         )}
                     </TooltipContent>
                 </Tooltip>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
+                    {displayName && colors && (
+                        <span
+                            className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full mb-1 border ${colors.bg} ${colors.text} ${colors.border} cursor-pointer hover:opacity-80 transition-opacity`}
+                            onClick={() => {
+                                if (onSpeakerRename) {
+                                    setEditValue(displayName);
+                                    setIsEditing(true);
+                                }
+                            }}
+                            title="Click to rename speaker"
+                        >
+                            {isEditing ? (
+                                <input
+                                    type="text"
+                                    className="w-24 bg-white border border-gray-300 rounded px-1 py-0 text-xs"
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    onBlur={handleRename}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleRename();
+                                        if (e.key === 'Escape') setIsEditing(false);
+                                    }}
+                                    autoFocus
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            ) : (
+                                displayName
+                            )}
+                        </span>
+                    )}
                     {isStreaming ? (
                         <div className="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
                             <p className="text-base text-gray-800 leading-relaxed">{displayText}</p>
@@ -124,6 +200,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     totalCount = 0,
     loadedCount = 0,
     onLoadMore,
+    speakerNames,
+    onSpeakerRename,
 }) => {
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -296,6 +374,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         confidence={segment.confidence}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
+                                        speakerId={segment.speaker_id}
+                                        speakerName={segment.speaker_id ? speakerNames?.[segment.speaker_id] : undefined}
+                                        onSpeakerRename={onSpeakerRename}
                                     />
                                 </div>
                             );
@@ -352,6 +433,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         confidence={segment.confidence}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
+                                        speakerId={segment.speaker_id}
+                                        speakerName={segment.speaker_id ? speakerNames?.[segment.speaker_id] : undefined}
+                                        onSpeakerRename={onSpeakerRename}
                                     />
                                 </motion.div>
                             );

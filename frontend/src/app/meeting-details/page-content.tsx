@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Summary, SummaryResponse } from '@/types';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
 import Analytics from '@/lib/analytics';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { toast } from 'sonner';
 import { TranscriptPanel } from '@/components/MeetingDetails/TranscriptPanel';
 import { SummaryPanel } from '@/components/MeetingDetails/SummaryPanel';
@@ -57,6 +58,8 @@ export default function PageContent({
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [isRecording] = useState(false);
   const [summaryResponse] = useState<SummaryResponse | null>(null);
+  const [isDiarizing, setIsDiarizing] = useState(false);
+  const [speakerNames, setSpeakerNames] = useState<Record<string, string>>({});
 
   // Ref to store the modal open function from SummaryGeneratorButtonGroup
   const openModelSettingsRef = useRef<(() => void) | null>(null);
@@ -128,6 +131,7 @@ export default function PageContent({
     meetingTitle: meetingData.meetingTitle,
     aiSummary: meetingData.aiSummary,
     blockNoteSummaryRef: meetingData.blockNoteSummaryRef,
+    speakerNames,
   });
 
   const meetingOperations = useMeetingOperations({
@@ -138,6 +142,84 @@ export default function PageContent({
   useEffect(() => {
     Analytics.trackPageView('meeting_details');
   }, []);
+
+  // Load speaker names from meeting metadata on mount
+  useEffect(() => {
+    const loadSpeakerNames = async () => {
+      try {
+        const metadata = await invoke<{
+          speaker_names?: Record<string, string>;
+        }>('api_get_meeting_metadata', { meetingId: meeting.id });
+        if (metadata?.speaker_names) {
+          setSpeakerNames(metadata.speaker_names);
+        }
+      } catch {
+        // Meeting metadata may not exist yet — that's fine
+      }
+    };
+    loadSpeakerNames();
+  }, [meeting.id]);
+
+  // Diarization handler
+  const handleDiarize = useCallback(async () => {
+    setIsDiarizing(true);
+    try {
+      const unlisten = await listen<{
+        status: string;
+        message?: string;
+        speaker_count?: number;
+        chunk_count?: number;
+      }>('diarization-progress', (event) => {
+        const { status, message, speaker_count, chunk_count } = event.payload;
+        if (status === 'completed') {
+          toast.success(
+            `Identified ${speaker_count ?? '?'} speaker${(speaker_count ?? 0) !== 1 ? 's' : ''} across ${chunk_count ?? '?'} segments`
+          );
+          // Reload speaker names
+          invoke<{ speaker_names?: Record<string, string> }>('api_get_meeting_metadata', {
+            meetingId: meeting.id,
+          }).then((meta) => {
+            if (meta?.speaker_names) {
+              setSpeakerNames(meta.speaker_names);
+            }
+          }).catch(() => {});
+          // Refetch transcripts to get updated speaker_id values
+          onRefetchTranscripts?.();
+        } else if (status === 'error') {
+          toast.error(message || 'Speaker identification failed');
+        } else {
+          // Processing — could show a loading toast
+        }
+      });
+
+      await invoke('api_diarize_meeting', {
+        meetingId: meeting.id,
+        hfToken: null, // User hasn't provided one yet
+      });
+      unlisten();
+    } catch (e) {
+      toast.error(`Diarization failed: ${String(e)}`);
+    } finally {
+      setIsDiarizing(false);
+    }
+  }, [meeting.id, onRefetchTranscripts]);
+
+  // Speaker rename handler
+  const handleSpeakerRename = useCallback(
+    async (speakerId: string, newName: string) => {
+      const updated = { ...speakerNames, [speakerId]: newName };
+      setSpeakerNames(updated);
+      try {
+        await invoke('api_save_speaker_names', {
+          meetingId: meeting.id,
+          speakers: updated,
+        });
+      } catch (e) {
+        toast.error(`Failed to save speaker name: ${String(e)}`);
+      }
+    },
+    [meeting.id, speakerNames]
+  );
 
   // Auto-generate summary when flag is set
   useEffect(() => {
@@ -191,6 +273,11 @@ export default function PageContent({
           meetingId={meeting.id}
           meetingFolderPath={meeting.folder_path}
           onRefetchTranscripts={onRefetchTranscripts}
+          // Diarization props
+          onDiarize={handleDiarize}
+          isDiarizing={isDiarizing}
+          speakerNames={speakerNames}
+          onSpeakerRename={handleSpeakerRename}
         />
         <SummaryPanel
           meeting={meeting}

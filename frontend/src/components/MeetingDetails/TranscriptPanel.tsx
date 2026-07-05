@@ -28,6 +28,12 @@ interface TranscriptPanelProps {
   meetingId?: string;
   meetingFolderPath?: string | null;
   onRefetchTranscripts?: () => Promise<void>;
+
+  // Diarization props
+  onDiarize?: () => void;
+  isDiarizing?: boolean;
+  speakerNames?: Record<string, string>;
+  onSpeakerRename?: (speakerId: string, newName: string) => void;
 }
 
 export function TranscriptPanel({
@@ -48,6 +54,10 @@ export function TranscriptPanel({
   meetingId,
   meetingFolderPath,
   onRefetchTranscripts,
+  onDiarize,
+  isDiarizing = false,
+  speakerNames,
+  onSpeakerRename,
 }: TranscriptPanelProps) {
   // Convert transcripts to segments if pagination is not used but we want virtualization
   const convertedSegments = useMemo(() => {
@@ -61,6 +71,7 @@ export function TranscriptPanel({
       endTime: t.audio_end_time,
       text: t.text,
       confidence: t.confidence,
+      speaker_id: t.speaker_id,
     }));
   }, [transcripts, usePagination, segments]);
 
@@ -75,6 +86,9 @@ export function TranscriptPanel({
           meetingId={meetingId}
           meetingFolderPath={meetingFolderPath}
           onRefetchTranscripts={onRefetchTranscripts}
+          onDiarize={onDiarize}
+          isDiarizing={isDiarizing}
+          hasDiarization={!!speakerNames && Object.keys(speakerNames).length > 0}
         />
       </div>
 
@@ -94,6 +108,8 @@ export function TranscriptPanel({
           totalCount={totalCount}
           loadedCount={loadedCount}
           onLoadMore={onLoadMore}
+          speakerNames={speakerNames}
+          onSpeakerRename={onSpeakerRename}
         />
       </div>
 

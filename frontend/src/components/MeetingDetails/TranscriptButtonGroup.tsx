@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
-import { Copy, FolderOpen, RefreshCw } from 'lucide-react';
+import { Copy, FolderOpen, RefreshCw, Users, Loader2 } from 'lucide-react';
 import Analytics from '@/lib/analytics';
 import { RetranscribeDialog } from './RetranscribeDialog';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -16,6 +16,10 @@ interface TranscriptButtonGroupProps {
   meetingId?: string;
   meetingFolderPath?: string | null;
   onRefetchTranscripts?: () => Promise<void>;
+  // Diarization props
+  onDiarize?: () => void;
+  isDiarizing?: boolean;
+  hasDiarization?: boolean;
 }
 
 
@@ -26,6 +30,9 @@ export function TranscriptButtonGroup({
   meetingId,
   meetingFolderPath,
   onRefetchTranscripts,
+  onDiarize,
+  isDiarizing = false,
+  hasDiarization = false,
 }: TranscriptButtonGroupProps) {
   const { betaFeatures } = useConfig();
   const [showRetranscribeDialog, setShowRetranscribeDialog] = useState(false);
@@ -67,6 +74,29 @@ export function TranscriptButtonGroup({
           <FolderOpen className="xl:mr-2" size={18} />
           <span className="hidden lg:inline">Recording</span>
         </Button>
+
+        {onDiarize && (
+          <Button
+            size="sm"
+            variant="outline"
+            className={`bg-gradient-to-r from-amber-50 to-yellow-50 hover:from-amber-100 hover:to-yellow-100 border-amber-200 xl:px-4 ${hasDiarization ? 'ring-1 ring-amber-300' : ''}`}
+            onClick={() => {
+              Analytics.trackButtonClick('identify_speakers', 'meeting_details');
+              onDiarize();
+            }}
+            disabled={transcriptCount === 0 || isDiarizing}
+            title={hasDiarization ? 'Speakers already identified. Click to re-run.' : 'Identify speakers in this meeting'}
+          >
+            {isDiarizing ? (
+              <Loader2 className="xl:mr-2 animate-spin" size={18} />
+            ) : (
+              <Users className="xl:mr-2" size={18} />
+            )}
+            <span className="hidden lg:inline">
+              {isDiarizing ? 'Identifying...' : hasDiarization ? 'Re-Identify' : 'Speakers'}
+            </span>
+          </Button>
+        )}
 
         {betaFeatures.importAndRetranscribe && meetingId && meetingFolderPath && (
           <Button

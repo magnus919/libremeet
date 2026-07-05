@@ -123,6 +123,9 @@ pub struct MeetingDetails {
     pub created_at: String,
     pub updated_at: String,
     pub transcripts: Vec<MeetingTranscript>,
+    /// Speaker diarization name mapping: SPEAKER_00 → "Alice"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speaker_names: Option<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -137,6 +140,9 @@ pub struct MeetingTranscript {
     pub audio_end_time: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration: Option<f64>,
+    // Speaker diarization label (e.g., "SPEAKER_00")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speaker_id: Option<String>,
 }
 
 /// Meeting metadata without transcripts (for pagination)
@@ -148,6 +154,9 @@ pub struct MeetingMetadata {
     pub updated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub folder_path: Option<String>,
+    /// Speaker diarization name mapping: SPEAKER_00 → "Alice"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speaker_names: Option<std::collections::HashMap<String, String>>,
 }
 
 /// Paginated transcripts response with total count
@@ -188,6 +197,9 @@ pub struct TranscriptSegment {
     pub audio_end_time: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duration: Option<f64>,
+    // Speaker diarization label (e.g., "SPEAKER_00")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speaker_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -822,12 +834,22 @@ pub async fn api_get_meeting_metadata<R: Runtime>(
     match MeetingsRepository::get_meeting_metadata(pool, &meeting_id).await {
         Ok(Some(meeting)) => {
             log_info!("Successfully retrieved meeting metadata {}", meeting_id);
+            let speaker_names = crate::database::repositories::meeting::MeetingsRepository::get_meeting_metadata_json(pool, &meeting_id)
+                .await
+                .ok()
+                .flatten()
+                .and_then(|json| {
+                    serde_json::from_str::<serde_json::Value>(&json).ok()
+                })
+                .and_then(|v| v.get("speakers").cloned())
+                .and_then(|s| serde_json::from_value::<HashMap<String, String>>(s).ok());
             Ok(MeetingMetadata {
                 id: meeting.id,
                 title: meeting.title,
                 created_at: meeting.created_at.0.to_rfc3339(),
                 updated_at: meeting.updated_at.0.to_rfc3339(),
                 folder_path: meeting.folder_path,
+                speaker_names,
             })
         }
         Ok(None) => {
@@ -878,6 +900,7 @@ pub async fn api_get_meeting_transcripts<R: Runtime>(
                     audio_start_time: t.audio_start_time,
                     audio_end_time: t.audio_end_time,
                     duration: t.duration,
+                    speaker_id: t.speaker_id,
                 })
                 .collect::<Vec<_>>();
 

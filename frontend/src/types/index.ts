@@ -16,6 +16,8 @@ export interface Transcript {
   audio_start_time?: number; // Seconds from recording start (e.g., 125.3)
   audio_end_time?: number;   // Seconds from recording start (e.g., 128.6)
   duration?: number;          // Segment duration in seconds (e.g., 3.3)
+  // Speaker diarization label (e.g., "SPEAKER_00")
+  speaker_id?: string;
 }
 
 export interface TranscriptUpdate {
@@ -92,6 +94,7 @@ export interface MeetingMetadata {
   created_at: string;
   updated_at: string;
   folder_path?: string;
+  speaker_names?: Record<string, string>; // SPEAKER_00 → "Alice"
 }
 
 export interface PaginatedTranscriptsResponse {
@@ -107,4 +110,5 @@ export interface TranscriptSegmentData {
   endTime?: number; // audio_end_time in seconds
   text: string;
   confidence?: number;
+  speaker_id?: string; // Speaker diarization label (e.g., "SPEAKER_00")
 }
