@@ -1,6 +1,7 @@
 MIT License
 
-Copyright (c) 2024 Zackriya Solutions
+Substantial portions Copyright (c) 2024 Zackriya Solutions.
+Additional contributions Copyright (c) 2026 Magnus Hedemark.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
